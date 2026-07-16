@@ -1,0 +1,35 @@
+# Visual Studio / .NET Core
+## Build results
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.user
+*.suo
+*.cache
+*.bak
+
+## Visual Studio Code
+.vscode/
+.idea/
+
+## Rider
+.idea/
+*.sln.iml
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.vs
+
+## NuGet packages
+*.nupkg
+packages/
+*.snupkg
+
+## OS generated files
+Thumbs.db
+.DS_Store
