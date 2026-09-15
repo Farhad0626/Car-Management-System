@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "CarApp.local": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "Database__ConnectionString": "server=localhost;database=CarManage;username=postgres;password=Farhad;port=5432;"
+      }
+    }
+  }
+}

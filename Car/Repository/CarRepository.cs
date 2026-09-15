@@ -1,125 +1,60 @@
 ﻿using CarApp.Data;
 using CarApp.Models;
-using Npgsql;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Terminal.Gui;
+using Dapper;
+using System;
 
 namespace CarApp.Repository;
 
-public class CarRepository : ICarRepository
+public class CarRepository(IDatabaseConnectionFactory databaseConnectionFactory) : ICarRepository
 {
-    private readonly IDatabase _database;
-
-    public CarRepository(IDatabase database)
-    {
-        _database = database;
-    }
+    // 1. Use Native Objects to interact with the database
+    // 2. Use Lite-ORM (Dapper, PetaPoco, etc.)
+    // 3. Use Full-ORM (Entity Framework, NHibernate, etc.)
 
     public Car? Add(Car car)
     {
-        using var connection = _database.GetConnection();
+        using var connection = databaseConnectionFactory.GetConnection();
 
         try
         {
-            connection.Open();
+            var result = connection.QueryFirst<Car?>(
+                SqlCommands.AddCar,
+                new
+                {
+                    year = car.Year,
+                    make = car.Make,
+                    model = car.Model,
+                    odometer = car.Odometer,
+                    price = car.Price,
+                    status = car.Status.ToString()
+                });
 
-            var command = new NpgsqlCommand(
-                @"INSERT INTO Cars (""Year"", Make, Model, Odometer, Price, Status)
-                  VALUES (@year, @make, @model, @odometer, @price, @status)
-                  RETURNING *;",
-                connection);
-
-            command.Parameters.AddWithValue("year", car.Year);
-            command.Parameters.AddWithValue("make", car.Make);
-            command.Parameters.AddWithValue("model", car.Model);
-            command.Parameters.AddWithValue("odometer", car.Odometer);
-            command.Parameters.AddWithValue("price", car.Price);
-            command.Parameters.AddWithValue("status", car.Status.ToString());
-
-            using var reader = command.ExecuteReader();
-
-            if (reader.Read())
-            {
-                return new Car(
-                    reader.GetInt64(0),
-                    reader.GetInt32(1),
-                    reader.GetString(2),
-                    reader.GetString(3),
-                    reader.GetInt64(4),
-                    reader.GetDecimal(5),
-                    Enum.Parse<CarStatus>(reader.GetString(6))
-                    );
-            }
+            return result;
         }
         catch (Exception e)
         {
+            // This is a problem!!!
             MessageBox.ErrorQuery("Database Error", e.ToString(), "_OK");
             throw;
         }
-        finally
-        {
-            if (connection.State == System.Data.ConnectionState.Open)
-            {
-                connection.Close();
-            }
-        }
-
-        return null;
     }
 
     private IReadOnlyCollection<Car> GetByStatus(string status)
     {
-        var cars = new List<Car>();
-
-        using var connection = _database.GetConnection();
+        using var connection = databaseConnectionFactory.GetConnection();
 
         try
         {
-            connection.Open();
-
-            var command = new NpgsqlCommand(
-                @"SELECT Id, ""Year"", Make, Model, Odometer, Price, Status
-                  FROM Cars
-                  WHERE Status = @status;",
-                connection);
-
-            command.Parameters.AddWithValue("status", status);
-
-            using var reader = command.ExecuteReader();
-
-            while (reader.Read())
-            {
-                var car = new Car(
-                    reader.GetInt64(0),
-                    reader.GetInt32(1),
-                    reader.GetString(2),
-                    reader.GetString(3),
-                    reader.GetInt64(4),
-                    reader.GetDecimal(5),
-                    Enum.Parse<CarStatus>(reader.GetString(6))
-                    );
-
-                cars.Add(car);
-            }
+            return connection.Query<Car>(
+                SqlCommands.GetCarsByStatus,
+                new { status }).ToList();
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
-            return [];
+            return Array.Empty<Car>();
         }
-        finally
-        {
-            if (connection.State == System.Data.ConnectionState.Open)
-            {
-                connection.Close();
-            }
-        }
-
-        return cars;
     }
 
     public IReadOnlyCollection<Car> GetAvailable()
@@ -136,16 +71,10 @@ public class CarRepository : ICarRepository
     {
         try
         {
-            using var connection = _database.GetConnection();
-            connection.Open();
-
-            var command = new NpgsqlCommand(
-                @"UPDATE Cars SET Status = 'Sold' WHERE Id = @id;",
-                connection);
-
-            command.Parameters.AddWithValue("id", id);
-
-            return command.ExecuteNonQuery() == 1;
+            using var connection = databaseConnectionFactory.GetConnection();
+            return connection.Execute(
+                SqlCommands.MarkCarAsSoldById,
+                new { id }) == 1;
         }
         catch (Exception e)
         {
@@ -158,24 +87,18 @@ public class CarRepository : ICarRepository
     {
         try
         {
-            using var connection = _database.GetConnection();
-            connection.Open();
-
-            var command = new NpgsqlCommand(
-                @"UPDATE Cars
-                  SET ""Year"" = @year, Make = @make, Model = @model,
-                      Odometer = @odometer, Price = @price
-                  WHERE Id = @id;",
-                connection);
-
-            command.Parameters.AddWithValue("year", car.Year);
-            command.Parameters.AddWithValue("make", car.Make);
-            command.Parameters.AddWithValue("model", car.Model);
-            command.Parameters.AddWithValue("odometer", car.Odometer);
-            command.Parameters.AddWithValue("price", car.Price);
-            command.Parameters.AddWithValue("id", car.Id);
-
-            command.ExecuteNonQuery();
+            using var connection = databaseConnectionFactory.GetConnection();
+            connection.Execute(
+                SqlCommands.UpdateCarById,
+                new
+                {
+                    year = car.Year,
+                    make = car.Make,
+                    model = car.Model,
+                    odometer = car.Odometer,
+                    price = car.Price,
+                    id = car.Id
+                });
         }
         catch (Exception e)
         {
@@ -187,16 +110,10 @@ public class CarRepository : ICarRepository
     {
         try
         {
-            using var connection = _database.GetConnection();
-            connection.Open();
-
-            var command = new NpgsqlCommand(
-                @"DELETE FROM Cars WHERE Id = @id;",
-                connection);
-
-            command.Parameters.AddWithValue("id", id);
-
-            command.ExecuteNonQuery();
+            using var connection = databaseConnectionFactory.GetConnection();
+            connection.Execute(
+                SqlCommands.DeleteCarById,
+                new { id });
         }
         catch (Exception e)
         {
