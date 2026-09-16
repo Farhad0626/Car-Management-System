@@ -1,5 +1,6 @@
 ﻿using CarApp.Models;
 using CarApp.Service;
+using CarApp.Exceptions;
 using Terminal.Gui;
 
 namespace CarApp.UI;
@@ -112,7 +113,16 @@ public class MainWindow : Window
 
     private void ShowAvailable()
     {
-        var cars = _service.GetAvailableCars().ToList();
+        System.Collections.Generic.List<Car> cars;
+        try
+        {
+            cars = _service.GetAvailableCars().ToList();
+        }
+        catch (DataAccessException ex)
+        {
+            MessageBox.ErrorQuery("Database Error", ex.InnerException?.Message ?? ex.Message, "_OK");
+            return;
+        }
 
         var items = cars
             .Select(c => $"{c.Id} | {c.Year} {c.Make} {c.Model} | {c.Odometer} mi | {c.Price:C}")
@@ -157,7 +167,15 @@ public class MainWindow : Window
         {
             if (!HasSelection(out var car)) return;
             if (!Confirm("Confirm", $"Mark {car.Year} {car.Make} {car.Model} as sold?")) return;
-            _service.MarkCarAsSold(car.Id);
+            try
+            {
+                _service.MarkCarAsSold(car.Id);
+            }
+            catch (DataAccessException ex)
+            {
+                MessageBox.ErrorQuery("Database Error", ex.InnerException?.Message ?? ex.Message, "_OK");
+                return;
+            }
             Application.RequestStop();
             Info("Car marked as sold!");
             ShowAvailable();
@@ -167,7 +185,15 @@ public class MainWindow : Window
         {
             if (!HasSelection(out var car)) return;
             if (!Confirm("Confirm", $"Delete {car.Year} {car.Make} {car.Model}? This cannot be undone.")) return;
-            _service.DeleteCar(car.Id);
+            try
+            {
+                _service.DeleteCar(car.Id);
+            }
+            catch (DataAccessException ex)
+            {
+                MessageBox.ErrorQuery("Database Error", ex.InnerException?.Message ?? ex.Message, "_OK");
+                return;
+            }
             Application.RequestStop();
             Info("Car deleted!");
             ShowAvailable();
@@ -200,7 +226,16 @@ public class MainWindow : Window
 
     private void ShowSold()
     {
-        var cars = _service.GetSoldCars().ToList();
+        System.Collections.Generic.List<Car> cars;
+        try
+        {
+            cars = _service.GetSoldCars().ToList();
+        }
+        catch (DataAccessException ex)
+        {
+            MessageBox.ErrorQuery("Database Error", ex.InnerException?.Message ?? ex.Message, "_OK");
+            return;
+        }
 
         var items = cars
             .Select(c => $"{c.Id} | {c.Year} {c.Make} {c.Model} | {c.Odometer} mi | {c.Price:C}")
@@ -231,7 +266,15 @@ public class MainWindow : Window
             if (cars.Count == 0 || index < 0 || index >= cars.Count) return;
             var car = cars[index];
             if (!Confirm("Confirm", $"Delete {car.Year} {car.Make} {car.Model}? This cannot be undone.")) return;
-            _service.DeleteCar(car.Id);
+            try
+            {
+                _service.DeleteCar(car.Id);
+            }
+            catch (DataAccessException ex)
+            {
+                MessageBox.ErrorQuery("Database Error", ex.InnerException?.Message ?? ex.Message, "_OK");
+                return;
+            }
             Application.RequestStop();
             Info("Car deleted!");
             ShowSold();
@@ -306,7 +349,15 @@ public class MainWindow : Window
                 return;
             }
 
-            _service.AddCar(year, make, model, odometer, price);
+            try
+            {
+                _service.AddCar(year, make, model, odometer, price);
+            }
+            catch (DataAccessException ex)
+            {
+                MessageBox.ErrorQuery("Database Error", ex.InnerException?.Message ?? ex.Message, "_OK");
+                return;
+            }
             Application.RequestStop();
             Info("Car added!");
         }
@@ -377,7 +428,15 @@ public class MainWindow : Window
                 return;
             }
 
-            _service.UpdateCar(car, year, make, model, odometer, price);
+            try
+            {
+                _service.UpdateCar(car, year, make, model, odometer, price);
+            }
+            catch (DataAccessException ex)
+            {
+                MessageBox.ErrorQuery("Database Error", ex.InnerException?.Message ?? ex.Message, "_OK");
+                return;
+            }
             Application.RequestStop();
             Info("Car updated!");
         }
