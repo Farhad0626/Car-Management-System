@@ -17,9 +17,9 @@ A terminal-based (TUI) Car Management application built with **C# / .NET 8**, **
 | Layer | Technology |
 |---|---|
 | Runtime | .NET 8 |
-| UI | [Terminal.Gui](https://github.com/gui-cs/Terminal.Gui) 1.19 (console-based UI) |
+| UI | [Terminal.Gui](https://github.com/gui-cs/Terminal.Gui) (console-based UI) |
 | Database | PostgreSQL |
-| Data access | [Npgsql](https://www.npgsql.org/) (raw SQL, parameterized queries) |
+| Data access | [Dapper](https://github.com/DapperLib/Dapper) (micro-ORM) with [Npgsql](https://www.npgsql.org/) as the ADO.NET provider |
 | Dependency Injection | Microsoft.Extensions.DependencyInjection |
 
 ## Project Structure
@@ -30,17 +30,20 @@ Car/
 └── Car/
     ├── CarApp.csproj
     ├── Program.cs                  # composition root / DI setup / app entry point
+    ├── appsettings.json            # optional configuration (Database:ConnectionString)
     ├── Database/
     │   └── CreateDatabase.sql      # schema for the Cars table
     ├── Data/
-    │   ├── IDatabase.cs            # connection abstraction
-    │   └── Postgresdb.cs           # Npgsql connection factory
+    │   ├── DatabaseOptions.cs      # configuration binding for connection string
+    │   ├── IDatabaseConnectionFactory.cs  # returns NpgsqlConnection
+    │   └── PostgresConnectionFactory.cs   # uses NpgsqlDataSource to create connections
     ├── Models/
     │   ├── Car.cs                  # domain entity
     │   └── CarStatus.cs            # Available / Sold enum
     ├── Repository/
     │   ├── ICarRepository.cs       # data access contract
-    │   └── CarRepository.cs        # SQL implementation (CRUD)
+    │   ├── SqlCommands.cs          # parameterized SQL statements
+    │   └── CarRepository.cs        # Dapper-based SQL implementation (CRUD)
     ├── Service/
     │   └── CarService.cs           # business logic layer
     └── UI/
@@ -99,28 +102,24 @@ CREATE TABLE IF NOT EXISTS Cars (
 
 ### 3. Configure the connection string
 
-The app reads its PostgreSQL connection string from an environment variable named **`CARAPP_CONNECTION`** — nothing is hard-coded in the source, so your credentials never end up in source control.
-
-Set it before running the app:
+The application reads its connection string from configuration bound to `Database:ConnectionString` (via `DatabaseOptions`). You can set this value in `appsettings.json` or via an environment variable named `Database__ConnectionString`.
 
 **Windows (PowerShell)**
 ```powershell
-$env:CARAPP_CONNECTION = "Host=localhost;Port=5432;Username=postgres;Password=your_password;Database=CarManage"
+$env:Database__ConnectionString = "Host=localhost;Port=5432;Username=postgres;Password=your_password;Database=CarManage"
 ```
 
-**Windows (permanent, so it persists across sessions)**
+**Windows (permanent)**
 ```powershell
-setx CARAPP_CONNECTION "Host=localhost;Port=5432;Username=postgres;Password=your_password;Database=CarManage"
+setx Database__ConnectionString "Host=localhost;Port=5432;Username=postgres;Password=your_password;Database=CarManage"
 ```
 
 **macOS / Linux (bash/zsh)**
 ```bash
-export CARAPP_CONNECTION="Host=localhost;Port=5432;Username=postgres;Password=your_password;Database=CarManage"
+export Database__ConnectionString="Host=localhost;Port=5432;Username=postgres;Password=your_password;Database=CarManage"
 ```
 
-To make it permanent on macOS/Linux, add the `export` line to your `~/.bashrc`, `~/.zshrc`, or `~/.profile`.
-
-Adjust `Host`, `Port`, `Username`, `Password`, and `Database` to match your actual PostgreSQL setup. If the variable is not set, the application will throw a clear error on startup telling you to define it.
+Note: the previous `CARAPP_CONNECTION` environment variable is no longer used by the default configuration — use `Database:ConnectionString` instead.
 
 ## Running the Application
 
@@ -132,7 +131,7 @@ dotnet build
 dotnet run --project Car
 ```
 
-On first run, `dotnet restore` will download the required NuGet packages (`Npgsql`, `Terminal.Gui`, `Microsoft.Extensions.DependencyInjection`).
+On first run, `dotnet restore` will download the required NuGet packages (`Dapper`, `Npgsql`, `Terminal.Gui`, `Microsoft.Extensions.DependencyInjection`).
 
 ## Usage / Keyboard Shortcuts
 
@@ -155,13 +154,19 @@ Everything in the app is reachable without a mouse:
 
 ## Architecture Notes
 
-- **Layered design**: `Data` → `Repository` → `Service` → `UI`. Each layer only depends on the interface of the layer beneath it (`IDatabase`, `ICarRepository`), which keeps the SQL and the UI fully decoupled.
+- **Layered design**: `Data` → `Repository` → `Service` → `UI`. Each layer only depends on the interface of the layer beneath it (`IDatabaseConnectionFactory`, `ICarRepository`), which keeps the SQL and the UI fully decoupled.
 - **Dependency Injection**: all components are registered in `Program.cs` via `Microsoft.Extensions.DependencyInjection` and resolved through constructor injection — no class calls `new` on its own dependencies.
-- **Parameterized SQL**: all queries use `NpgsqlCommand` parameters (e.g. `@year`, `@make`) to prevent SQL injection.
+- **Parameterized SQL**: all queries use `Dapper` with parameterized queries to prevent SQL injection.
 - **Resilient data access**: repository methods wrap database calls in `try/catch/finally`, so a database outage or query failure is caught and reported instead of crashing the app.
+
+## Data Access Notes
+
+- The repository layer uses Dapper for mapping query results to POCOs while using `NpgsqlConnection` from `IDatabaseConnectionFactory`.
+- SQL statements are centralized in `Repository/SqlCommands.cs`, and the repository uses parameterized queries and PostgreSQL `RETURNING *` for insert operations where appropriate.
+- `PostgresConnectionFactory` creates an `NpgsqlDataSource` once and hands out pooled `NpgsqlConnection` instances; this is the recommended usage for performance and resource management.
 
 ## Troubleshooting
 
-- **"Please create the 'CARAPP_CONNECTION' environment variable..."** — the environment variable isn't set in the terminal session you're running from. Set it as shown above, and make sure you're running `dotnet run` from a terminal where that variable is visible (restart the terminal after using `setx` on Windows).
+- **"Please create the 'Database__ConnectionString' environment variable..."** — the environment variable isn't set in the terminal session you're running from. Set it as shown above, and make sure you're running `dotnet run` from a terminal where that variable is visible (restart the terminal after using `setx` on Windows).
 - **Connection refused / timeout** — verify PostgreSQL is running and listening on the host/port in your connection string, and that the `pg_hba.conf` on the server allows connections from your machine.
 - **relation "cars" does not exist** — the schema script (`Database/CreateDatabase.sql`) hasn't been run against the target database yet.
